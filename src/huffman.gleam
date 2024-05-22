@@ -19,10 +19,9 @@ pub fn main() {
   case args {
     ["decode", path] -> {
       let assert Ok(rs) = read_stream.open(path)
-      let assert Ok(bits) = read_stream.read_bytes(rs, 10000000) 
+      let assert Ok(bits) = read_stream.read_bytes(rs, 10_000_000)
       let assert Ok(Nil) = read_stream.close(rs)
 
-      
       let text = huffman_decode(bits)
       io.println("decoded text")
       io.print(text)
@@ -39,12 +38,12 @@ pub fn main() {
 const version = 0x0001
 
 fn huffman_decode(bits: BitArray) -> String {
-
   let #(_version, bits) = decode_int(bits, 16)
   let #(table_size, bits) = decode_int(unwrap(bits), 16)
   let #(text_size, bits) = decode_int(unwrap(bits), 32)
   let assert Ok(encoded_table) = bit_array.slice(unwrap(bits), 0, table_size)
-  let assert Ok(encoded_text) = bit_array.slice(unwrap(bits), table_size, text_size)
+  let assert Ok(encoded_text) =
+    bit_array.slice(unwrap(bits), table_size, text_size)
   let table = decode_table(encoded_table)
 
   decode_text(encoded_text, table)
@@ -56,7 +55,10 @@ fn decode_text(bits: BitArray, table: Dict(String, #(Int, Int))) -> String {
   text
 }
 
-fn decode_text_loop(bits: BitArray, inv_table: Dict(#(Int, Int), String)) -> String {
+fn decode_text_loop(
+  bits: BitArray,
+  inv_table: Dict(#(Int, Int), String),
+) -> String {
   case find_code(bits, inv_table, 0, 0) {
     #("", _) -> ""
     #(char, bits) -> {
@@ -65,7 +67,12 @@ fn decode_text_loop(bits: BitArray, inv_table: Dict(#(Int, Int), String)) -> Str
   }
 }
 
-fn find_code(bits: BitArray, inv_table: Dict(#(Int, Int), String), acc: Int, depth: Int) -> #(String, BitArray) {
+fn find_code(
+  bits: BitArray,
+  inv_table: Dict(#(Int, Int), String),
+  acc: Int,
+  depth: Int,
+) -> #(String, BitArray) {
   case bits {
     <<bit:size(1), rest:bits>> -> {
       let key = int.bitwise_shift_left(acc, 1) + bit
@@ -78,7 +85,6 @@ fn find_code(bits: BitArray, inv_table: Dict(#(Int, Int), String), acc: Int, dep
   }
 }
 
-
 fn decode_table(bits: BitArray) -> Dict(String, #(Int, Int)) {
   let #(char, bits) = decode_char(bits)
   case bits {
@@ -90,12 +96,12 @@ fn decode_table(bits: BitArray) -> Dict(String, #(Int, Int)) {
           case bits {
             Ok(bits) -> {
               dict.new()
-              |> dict.insert(_, char, #(code, len))
-              |> dict.merge(_, decode_table(bits))
+              |> dict.insert(char, #(code, len))
+              |> dict.merge(decode_table(bits))
             }
             Error(_) -> dict.new()
-      }
           }
+        }
         Error(_) -> dict.new()
       }
     }
@@ -105,7 +111,10 @@ fn decode_table(bits: BitArray) -> Dict(String, #(Int, Int)) {
 
 fn decode_char(bits: BitArray) -> #(String, Result(BitArray, Nil)) {
   case bits {
-    <<byte:utf8_codepoint, rest:bits>> -> #(string.from_utf_codepoints([byte]), Ok(rest))
+    <<byte:utf8_codepoint, rest:bits>> -> #(
+      string.from_utf_codepoints([byte]),
+      Ok(rest),
+    )
     <<byte:utf8_codepoint>> -> #(string.from_utf_codepoints([byte]), Error(Nil))
     _ -> #("", Error(Nil))
   }
@@ -154,15 +163,15 @@ fn make_encoded(array: BitArray, table: Dict(String, #(Int, Int))) -> BitArray {
   let table_size_bytes = table_size + table_offset
   let table_size_bytes = table_size_bytes / 8
 
-
   <<>>
-  |> bit_array.append(_, <<version:size(16)>>)
-  |> bit_array.append(_, <<table_size_bytes:size(16)>>)
-  |> bit_array.append(_, <<text_size:size(32)>>)
-  |> bit_array.append(_, encoded_table)
-  |> bit_array.append(_, <<0:size(table_offset)>>)
-  |> bit_array.append(_, array)
+  |> bit_array.append(<<version:size(16)>>)
+  |> bit_array.append(<<table_size_bytes:size(16)>>)
+  |> bit_array.append(<<text_size:size(32)>>)
+  |> bit_array.append(encoded_table)
+  |> bit_array.append(<<0:size(table_offset)>>)
+  |> bit_array.append(array)
 }
+
 fn write_encoded(bits: BitArray) {
   let assert Ok(ws) = write_stream.open("out.bin")
   let assert Ok(Nil) = write_stream.write_bytes(ws, bits)
@@ -175,8 +184,9 @@ fn encode_table(table: Dict(String, #(Int, Int))) -> #(BitArray, Int) {
     Ok(key) -> {
       let assert Ok(code) = dict.get(table, key)
       let #(bits, len) = encode_table(dict.delete(table, key))
-      let bits = <<key:utf8, code.1:size(8), code.0:size(code.1)>>
-      |> bit_array.append(_, bits)
+      let bits =
+        <<key:utf8, code.1:size(8), code.0:size(code.1)>>
+        |> bit_array.append(bits)
       #(bits, len + 8 + 8 + code.1)
     }
     Error(_) -> {
@@ -220,7 +230,11 @@ fn make_table(tree: Tree) -> Dict(String, #(Int, Int)) {
   }
 }
 
-fn make_table_rec(tree: Tree, hist: Int, depth: Int) -> Dict(String, #(Int, Int)) {
+fn make_table_rec(
+  tree: Tree,
+  hist: Int,
+  depth: Int,
+) -> Dict(String, #(Int, Int)) {
   case tree {
     Leaf(_, char) -> {
       let d = dict.new()
@@ -236,10 +250,8 @@ fn make_table_rec(tree: Tree, hist: Int, depth: Int) -> Dict(String, #(Int, Int)
 
 fn make_tree(freq: Dict(String, Int)) -> Tree {
   let freq = dict.to_list(freq)
-  let freq = list.sort(freq, fn(a, b) {int.compare(a.1, b.1)})
-  let freq = list.map(freq, fn(x) {
-    Leaf(char: x.0, freq: x.1)
-  })
+  let freq = list.sort(freq, fn(a, b) { int.compare(a.1, b.1) })
+  let freq = list.map(freq, fn(x) { Leaf(char: x.0, freq: x.1) })
   case make_tree_loop(freq) {
     [t] -> t
     _ -> {
@@ -249,18 +261,23 @@ fn make_tree(freq: Dict(String, Int)) -> Tree {
     }
   }
 }
+
 fn make_tree_loop(freq: List(Tree)) -> List(Tree) {
-  case list.pop(freq, fn(_){True}) {
-    Ok(#(lhs, freq)) -> case list.pop(freq, fn(_){True}) {
-      Ok(#(rhs, freq)) -> {
-        let freq = list.append(freq, [Node(lhs: lhs, rhs: rhs, freq: lhs.freq + rhs.freq)])
-        list.sort(freq, fn(a, b){int.compare(a.freq, b.freq)})
-        |> make_tree_loop()
+  case list.pop(freq, fn(_) { True }) {
+    Ok(#(lhs, freq)) ->
+      case list.pop(freq, fn(_) { True }) {
+        Ok(#(rhs, freq)) -> {
+          let freq =
+            list.append(freq, [
+              Node(lhs: lhs, rhs: rhs, freq: lhs.freq + rhs.freq),
+            ])
+          list.sort(freq, fn(a, b) { int.compare(a.freq, b.freq) })
+          |> make_tree_loop()
+        }
+        Error(_) -> {
+          [lhs]
+        }
       }
-      Error(_) -> {
-        [lhs]
-      }
-    }
     Error(_) -> freq
   }
 }
@@ -271,11 +288,11 @@ fn get_freq(content: String) -> Dict(String, Int) {
       let d = dict.new()
       let d = dict.insert(d, char, 1)
       dict_join(d, get_freq(string.drop_left(content, 1)), fn(v1, v2) {
-        let v1 =case v1 {
+        let v1 = case v1 {
           Ok(v) -> v
           Error(_) -> 0
         }
-        let v2 =case v2 {
+        let v2 = case v2 {
           Ok(v) -> v
           Error(_) -> 0
         }
@@ -286,13 +303,22 @@ fn get_freq(content: String) -> Dict(String, Int) {
   }
 }
 
-fn dict_join(d1: Dict(key, value), d2: Dict(key, value), f: fn(Result(value, Nil), Result(value, Nil)) -> value) -> Dict(key, value) {
+fn dict_join(
+  d1: Dict(key, value),
+  d2: Dict(key, value),
+  f: fn(Result(value, Nil), Result(value, Nil)) -> value,
+) -> Dict(key, value) {
   let keys = dict.keys(d1)
   dict_join_loop(d1, d2, f, keys)
 }
 
-fn dict_join_loop(d1: Dict(key, value), d2: Dict(key, value), f: fn(Result(value, Nil), Result(value, Nil)) -> value, keys: List(key)) -> Dict(key, value) {
-  case list.pop(keys, fn(_) {True}) {
+fn dict_join_loop(
+  d1: Dict(key, value),
+  d2: Dict(key, value),
+  f: fn(Result(value, Nil), Result(value, Nil)) -> value,
+  keys: List(key),
+) -> Dict(key, value) {
+  case list.pop(keys, fn(_) { True }) {
     Ok(#(key, l)) -> {
       let d = dict_join_loop(d1, dict.drop(d2, [key]), f, l)
       dict.insert(d, key, f(dict.get(d1, key), dict.get(d2, key)))
@@ -307,20 +333,24 @@ fn unwrap(res: Result(a, b)) -> a {
     Error(_) -> panic
   }
 }
+
 fn invert(d: Dict(a, b)) -> Dict(b, a) {
-  case dict.keys(d) |> list.first() {
+  case
+    dict.keys(d)
+    |> list.first()
+  {
     Ok(key) -> {
       case dict.keys(d) {
         [key, ..] -> {
           let assert Ok(value) = dict.get(d, key)
           dict.new()
-          |> dict.insert(_, value, key)
-          |> dict.merge(_, invert(dict.delete(d, key)))
+          |> dict.insert(value, key)
+          |> dict.merge(invert(dict.delete(d, key)))
         }
         _ -> {
           let assert Ok(value) = dict.get(d, key)
           dict.new()
-          |> dict.insert(_, value, key)
+          |> dict.insert(value, key)
         }
       }
     }
@@ -330,7 +360,10 @@ fn invert(d: Dict(a, b)) -> Dict(b, a) {
   }
 }
 
-fn compare_table(table1: Dict(String, #(Int, Int)), table2: Dict(String, #(Int, Int))) {
+fn compare_table(
+  table1: Dict(String, #(Int, Int)),
+  table2: Dict(String, #(Int, Int)),
+) {
   case dict.keys(table1) {
     [key, ..] -> {
       let assert Ok(value1) = dict.get(table1, key)
@@ -372,6 +405,7 @@ fn display_len_table(table: Dict(String, #(Int, Int))) {
     }
   }
 }
+
 fn display_table(table: Dict(String, Int)) {
   case dict.keys(table) {
     [key, ..] -> {
